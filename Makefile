@@ -5,30 +5,29 @@
 # Assignment: Lab 4 - Threads from the Crypt 
 # Description: Makefile for Threads from the Crypt. 
 # Targets: all (default)
-#          clean (Aliases: clena, claen, cls, cl)
-#          tar : create a tarball of all source files and Makefile
-#          git : auto git add and commit
-#          debug : compile with debug flags
-#          test	: run tests against master viktar program
+# 		   thread_hash     : the executable
+# 		   thread_hash.o   : the object file
+# 		   clean           : remove all generated files
+# 		   tar             : create a tarball of the files
+# 		   git             : add, commit, and push to git
+#  	       test            : run the test script
+#  	       debug           : compile with debug flags
 #
 ###############################################################################
 
-# Variables
-PROGRAM = thread_hash 
-CFLAGS = -Wall -Wextra -Wshadow -Wunreachable-code -Wredundant-decls \
-		 -Wmissing-declarations -Wold-style-definition -Wmissing-prototypes \
+PROGRAM = thread_hash
+CC = gcc
+CFLAGS = -Wall -Wextra -Wshadow -Wunreachable-code \
+		 -Wredundant-decls -Wmissing-declarations \
+	     -Wold-style-definition -Wmissing-prototypes \
 		 -Wdeclaration-after-statement -Wno-return-local-addr \
 		 -Wunsafe-loop-optimizations -Wuninitialized -Werror \
-		 -Wno-unused-parameter
-DFLAGS = -DNOISY_DEBUG -g
-LDFLAGS = -lz
-CC = gcc
+		 -Wno-unused-parameter -Wno-string-compare -Wno-stringop-overflow \
+		 -Wno-stringop-overread -Wno-stringop-truncation
 TAR_FILE = ${LOGNAME}_Lab4.tar.gz
-TEST_FILE = test-threads.bash
+TEST_FILE = test-thread_hash.bash
 
-.PHONY: test
-
-all: $(PROGRAM) 
+all: $(PROGRAM)
 
 $(PROGRAM): $(PROGRAM).o
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
@@ -39,8 +38,6 @@ $(PROGRAM).o: $(PROGRAM).c $(PROGRAM).h
 # I am bad at typing clean.
 clean clena claen cls cl:
 	rm -f $(PROGRAM) $(PROGRAM).o *~ \#*
-	rm -f *.viktar *.bin *.out *.err *.txt *.jerr *.jout *.serr *.sout
-	
 
 tar:
 	tar -cvaf ${TAR_FILE} *.c [Mm]akefile
@@ -52,7 +49,6 @@ git:
 
 test:
 	./$(TEST_FILE)
-	
 
 debug: $(PROGRAM).c $(PROGRAM).h 
 	$(CC) $(CFLAGS) $(DFLAGS) -o $(PROGRAM) $(PROGRAM).c $(LDFLAGS)
