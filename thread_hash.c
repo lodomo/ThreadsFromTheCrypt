@@ -14,7 +14,6 @@
 # ifndef NICE_VALUE : define NICE_VALUE 10
 
 // This comes from a terrific Stackover flow posting.
-//
 https://stackoverflow.com/questions/9907160/how-to-convert-enum-names-to-string-in-c
 # define FOREACH_ALGORITHM(ALGORITHM) \
         ALGORITHM(DES)           \
@@ -58,4 +57,3 @@ static const char *algorithm_string[] = {
 int main(int argc, char *argv[]) { 
     return EXIT_SUCCESS; 
 }
-

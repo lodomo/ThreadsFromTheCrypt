@@ -12,6 +12,7 @@
 # 		   git             : add, commit, and push to git
 #  	       test            : run the test script
 #  	       debug           : compile with debug flags
+#  	       memcheck        : run valgrind on the program
 #
 ###############################################################################
 
@@ -24,6 +25,7 @@ CFLAGS = -Wall -Wextra -Wshadow -Wunreachable-code \
 		 -Wunsafe-loop-optimizations -Wuninitialized -Werror \
 		 -Wno-unused-parameter -Wno-string-compare -Wno-stringop-overflow \
 		 -Wno-stringop-overread -Wno-stringop-truncation
+LDFLAGS = -lcrypt
 TAR_FILE = ${LOGNAME}_Lab4.tar.gz
 TEST_FILE = test-thread_hash.bash
 
@@ -52,3 +54,7 @@ test:
 
 debug: $(PROGRAM).c $(PROGRAM).h 
 	$(CC) $(CFLAGS) $(DFLAGS) -o $(PROGRAM) $(PROGRAM).c $(LDFLAGS)
+
+# TODO SET THIS UP FOR THE 10 WORDS 
+memcheck: $(PROGRAM)
+	valgrind --leak-check=full ./$(PROGRAM)
