@@ -49,6 +49,7 @@ static const char *algorithm_string[] = {
 #include <sys/types.h> // mode_t, off_t, uid_t, gid_t
 #include <time.h>      // localtime, strftime, struct tm
 #include <unistd.h>    // close, lseek, read, write, STDOUT_FILENO
+#include <sys/mman.h>  // mmap, munmap
 
 // Noisy debugger for verbose debugging
 #ifdef NOISY_DEBUG
@@ -65,7 +66,7 @@ static const char *algorithm_string[] = {
 #define FALSE 0
 #define TRUE 1
 
-#define MAX_FILE_NAME 256
+#define READBUF 1024
 
 struct program_settings_s {
     char *input_file;
@@ -80,10 +81,13 @@ void process_options(int argc, char *argv[],
                      struct program_settings_s *settings);
 void detect_start_errors(struct program_settings_s *settings);
 void help(void);
+char *load_file(char *filename);
 char **ragged_array(char *filename, int *word_count);
 
 int main(int argc, char *argv[]) {
     struct program_settings_s settings;
+    char * hashes;
+    char * dictionary;
 
     settings.input_file = NULL;
     settings.output_file = NULL;
@@ -94,44 +98,22 @@ int main(int argc, char *argv[]) {
     NOISY_DEBUG_PRINT;
     process_options(argc, argv, &settings);
     NOISY_DEBUG_PRINT;
+    detect_start_errors(&settings);
+    NOISY_DEBUG_PRINT;
+    hashes = load_file(settings.input_file);
+    NOISY_DEBUG_PRINT;
+    dictionary = load_file(settings.dictionary);
+    NOISY_DEBUG_PRINT;
 
-    // DELETE THIS SECTION WHEN ALGORITHM ENUM IS IMPLEMENTE
+    // DELETE THIS SECTION WHEN THESE VARIABLES HAVE BEEN USED ELSEWHERE
+    // PREVENTS COMPILER WARNINGS
+    fprintf(stderr, "input: %s\n", hashes);
+    fprintf(stderr, "dictionary: %s\n", dictionary);
     fprintf(stderr, "%s\n", algorithm_string[DES]);
     // DELETE THIS SECTION WHEN DONE
-    //
-    /*
-    if (!input_file) {
-        fprintf(stderr, "must give name for hashed password input file with
-    -i\n"); exit(EXIT_FAILURE);
-    }
-
-    if (threads < 1) {
-        exit(EXIT_FAILURE);
-    }
-
-    // Open the input file
-    if ((ifd = open(input_file, O_RDONLY)) < 0) {
-        fprintf(stderr, "failed to open input file");
-        exit(EXIT_FAILURE);
-    }
-
-    // Open the output file
-    if (!output_file) {
-        ofd = STDOUT_FILENO;
-    } else {
-        if ((ofd = open(output_file, O_WRONLY | O_TRUNC | O_CREAT,
-                        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) < 0) {
-    fprintf(stderr, "failed to open output file"); exit(EXIT_FAILURE);
-        }
-    }
-
-    // Open the dictionary file
-    if ((dfd = open(dictionary, O_RDONLY)) < 0) {
-        fprintf(stderr, "failed to open input file");
-        exit(EXIT_FAILURE);
-    }
-
-    */
+    
+    free(hashes);
+    free(dictionary);
     return EXIT_SUCCESS;
 }
 
@@ -186,6 +168,14 @@ void process_options(int argc, char *argv[],
             break;
         }
     }
+
+    if (settings->verbose) {
+        fprintf(stderr, "Running with %d threads\n", settings->threads);
+        fprintf(stderr, "Input file: %s\n", settings->input_file);
+        fprintf(stderr, "Output file: %s\n", settings->output_file);
+        fprintf(stderr, "Dictionary file: %s\n", settings->dictionary);
+        fprintf(stderr, "Threads: %d\n", settings->threads);
+    }
 }
 
 void detect_start_errors(struct program_settings_s *settings) {
@@ -219,4 +209,37 @@ void help(void) {
         "1)\n"
         "               -v              enable verbose mode\n"
         "               -h              helpful text\n");
+}
+
+char *load_file(char *filename) {
+    int fd;
+    struct stat st;
+    char *file_data;
+    char buffer[READBUF];
+    int bytes_read = 0;
+
+    if ((fd = open(filename, O_RDONLY)) < 0) {
+        fprintf(stderr, "open failed on %s\n", filename);
+        exit(EXIT_FAILURE);
+    }
+
+    if (fstat(fd, &st) < 0) {
+        fprintf(stderr, "fstat failed on %s\n", filename);
+        exit(EXIT_FAILURE);
+    }
+
+    file_data = (char *)malloc(st.st_size + 1);
+    if (file_data == NULL) {
+        fprintf(stderr, "malloc failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    while ((bytes_read = read(fd, buffer, READBUF)) > 0) {
+        strncat(file_data, buffer, bytes_read);
+    }
+
+    file_data[st.st_size] = '\0';
+
+    close(fd);
+    return file_data;
 }
