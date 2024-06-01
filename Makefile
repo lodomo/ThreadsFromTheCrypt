@@ -40,6 +40,7 @@ $(PROGRAM).o: $(PROGRAM).c $(PROGRAM).h
 # I am bad at typing clean.
 clean clena claen cls cl:
 	rm -f $(PROGRAM) $(PROGRAM).o *~ \#*
+	rm -f *.output *.error
 
 tar:
 	tar -cvaf ${TAR_FILE} *.c [Mm]akefile

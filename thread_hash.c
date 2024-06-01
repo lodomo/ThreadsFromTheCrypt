@@ -38,6 +38,7 @@ static const char *algorithm_string[] = {
 };
 */
 
+#include "thread_hash.h"
 #include <crypt.h>     // Crypt functions
 #include <fcntl.h>     // open, O_RDONLY, O_WRONLY, O_TRUNC, O_CREAT
 #include <pthread.h>   // Thread functions
@@ -49,71 +50,160 @@ static const char *algorithm_string[] = {
 #include <time.h>      // localtime, strftime, struct tm
 #include <unistd.h>    // close, lseek, read, write, STDOUT_FILENO
 
-#include "thread_hash.h"
+// Noisy debugger for verbose debugging
+#ifdef NOISY_DEBUG
+#define NOISY_DEBUG_PRINT                                                      \
+    fprintf(stderr, "DEBUG: %s:%s:%d\n", __FILE__, __func__, __LINE__)
+#else // NOISY_DEBUG
+#define NOISY_DEBUG_PRINT
+#endif // NOISY_DEBUG
 
+// Verbose mode prefix and postfix
+#define V_PREFIX ">> "
+#define V_POSTFIX " <<"
+
+#define FALSE 0
+#define TRUE 1
+
+#define MAX_FILE_NAME 256
+
+struct program_settings_s {
+    char *input_file;
+    char *output_file;
+    char *dictionary;
+    int threads;
+    int verbose;
+} settings_t;
+
+void verbose(const char *msg, struct program_settings_s *settings);
+void process_options(int argc, char *argv[],
+                     struct program_settings_s *settings);
+void detect_start_errors(struct program_settings_s *settings);
 void help(void);
+char **ragged_array(char *filename, int *word_count);
 
 int main(int argc, char *argv[]) {
-    char *input_file = NULL;
-    char *output_file = NULL;
-    char *dictionary = NULL;
-    int threads = 1;
-    int verbose = 0;
+    struct program_settings_s settings;
 
-    {
-        // Handle command line arguments. Exit if invalid.
-        int opt = -1;
+    settings.input_file = NULL;
+    settings.output_file = NULL;
+    settings.dictionary = NULL;
+    settings.threads = 1;
+    settings.verbose = 0;
 
-        while ((opt = getopt(argc, argv, OPTIONS)) != -1) {
-            switch (opt) {
-            case 'i':
-                input_file = strcpy(input_file, optarg);
-                break;
-            case 'o':
-                output_file = strcpy(output_file, optarg);
-                break;
-            case 'd':
-                dictionary = strcpy(dictionary, optarg);
-                break;
-            case 'h':
-                help();
-                exit(EXIT_SUCCESS);
-                break;
-            case 'v':
-                verbose += 1;
-                fprintf(stderr, "Verbose mode enabled: Level %d\n", verbose);
-                break;
-            case 't':
-                threads = atoi(optarg);
-                break;
-            case 'n':
-                nice(NICE_VALUE);
-                break;
-            default:
-                fprintf(stderr,
-                        "oopsie - unrecognized command line option \"%s\"\n",
-                        argv[optind]);
-                exit(EXIT_FAILURE);
-                break;
-            }
-        }
+    NOISY_DEBUG_PRINT;
+    process_options(argc, argv, &settings);
+    NOISY_DEBUG_PRINT;
 
-        if (!dictionary) {
-            fprintf(stderr, "must give name for dictionary input file with -d\n");
-            exit(EXIT_FAILURE);
-        }
+    // DELETE THIS SECTION WHEN ALGORITHM ENUM IS IMPLEMENTE
+    fprintf(stderr, "%s\n", algorithm_string[DES]);
+    // DELETE THIS SECTION WHEN DONE
+    //
+    /*
+    if (!input_file) {
+        fprintf(stderr, "must give name for hashed password input file with
+    -i\n"); exit(EXIT_FAILURE);
+    }
 
-        if (!input_file) {
-            fprintf(stderr, "must give name for hashed password input file with -i\n");
-            exit(EXIT_FAILURE);
-        }
+    if (threads < 1) {
+        exit(EXIT_FAILURE);
+    }
 
-        if (threads < 1) {
-            fprintf(stderr, "invalid thread count %d\n", threads);
-            exit(EXIT_FAILURE);
+    // Open the input file
+    if ((ifd = open(input_file, O_RDONLY)) < 0) {
+        fprintf(stderr, "failed to open input file");
+        exit(EXIT_FAILURE);
+    }
+
+    // Open the output file
+    if (!output_file) {
+        ofd = STDOUT_FILENO;
+    } else {
+        if ((ofd = open(output_file, O_WRONLY | O_TRUNC | O_CREAT,
+                        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) < 0) {
+    fprintf(stderr, "failed to open output file"); exit(EXIT_FAILURE);
         }
     }
+
+    // Open the dictionary file
+    if ((dfd = open(dictionary, O_RDONLY)) < 0) {
+        fprintf(stderr, "failed to open input file");
+        exit(EXIT_FAILURE);
+    }
+
+    */
     return EXIT_SUCCESS;
+}
+
+void verbose(const char *msg, struct program_settings_s *settings) {
+    if (settings->verbose) {
+        fprintf(stderr, "%s%s%s\n", V_PREFIX, msg, V_POSTFIX);
+    }
+}
+
+void process_options(int argc, char *argv[],
+                     struct program_settings_s *settings) {
+    int opt = -1;
+
+    // Make sure everything is properly sorted before we start
+    while ((opt = getopt(argc, argv, OPTIONS)) != -1) {
+    }
+
+    opt = 0;
+    optind = 0;
+
+    while ((opt = getopt(argc, argv, OPTIONS)) != -1) {
+        switch (opt) {
+        case 'i':
+            settings->input_file = optarg;
+            break;
+        case 'o':
+            settings->output_file = optarg;
+            break;
+        case 'd':
+            settings->dictionary = optarg;
+            break;
+        case 'h':
+            help();
+            exit(EXIT_SUCCESS);
+            break;
+        case 'v':
+            settings->verbose += 1;
+            fprintf(stderr, "Verbose mode enabled: Level %d\n",
+                    settings->verbose);
+            break;
+        case 't':
+            settings->threads = atoi(optarg);
+            break;
+        case 'n':
+            nice(NICE_VALUE);
+            break;
+        default:
+            fprintf(stderr,
+                    "oopsie - unrecognized command line option \"%s\"\n",
+                    argv[optind]);
+            exit(EXIT_FAILURE);
+            break;
+        }
+    }
+}
+
+void detect_start_errors(struct program_settings_s *settings) {
+    if (!settings->dictionary) {
+        fprintf(stderr, "must give name for dictionary input file with -d\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (!settings->input_file) {
+        fprintf(stderr,
+                "must give name for hashed password input file with -i\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (settings->threads < 1) {
+        fprintf(stderr, "invalid thread count %d\n", settings->threads);
+        exit(EXIT_FAILURE);
+    }
 }
 
 void help(void) {
