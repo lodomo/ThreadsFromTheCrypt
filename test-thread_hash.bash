@@ -50,7 +50,3 @@ if [ $? -eq 0 ]; then
 else
     echo "Failed"
 fi
-
-# Test Valgrind 1
-echo "Valgrind Test"
-$LDM_PROGRAM -v -i ${TEN_K_LIST[0]} -d ${TEN_K_LIST[1]} -n >/dev/null 2>/dev/null

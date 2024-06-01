@@ -58,4 +58,4 @@ debug: $(PROGRAM).c $(PROGRAM).h
 
 # TODO SET THIS UP FOR THE 10 WORDS 
 memcheck: $(PROGRAM)
-	valgrind --leak-check=full ./$(PROGRAM) -i ./Master/passwords10.txt -d ./Master/plain10.txt
+	valgrind --track-origins=yes --leak-check=full ./$(PROGRAM) -i ./Master/passwords10.txt -d ./Master/plain10.txt
