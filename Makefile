@@ -26,6 +26,7 @@ CFLAGS = -Wall -Wextra -Wshadow -Wunreachable-code \
 		 -Wno-unused-parameter -Wno-string-compare -Wno-stringop-overflow \
 		 -Wno-stringop-overread -Wno-stringop-truncation
 LDFLAGS = -lcrypt
+DFLAGS = -g -DNOISY_DEBUG
 TAR_FILE = ${LOGNAME}_Lab4.tar.gz
 TEST_FILE = test-thread_hash.bash
 

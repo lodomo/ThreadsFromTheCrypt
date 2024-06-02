@@ -47,6 +47,7 @@ static const char *algorithm_string[] = {
 #include <string.h>    // strcmp, strlen, strncpy
 #include <sys/mman.h>  // mmap, munmap
 #include <sys/stat.h>  // stat, struct stat, S_IRUSR, S_IWUSR, S_IRGRP, S_IROTH
+#include <sys/time.h>  // gettimeofday, struct timeval
 #include <sys/types.h> // mode_t, off_t, uid_t, gid_t
 #include <time.h>      // localtime, strftime, struct tm
 #include <unistd.h>    // close, lseek, read, write, STDOUT_FILENO
@@ -68,13 +69,25 @@ static const char *algorithm_string[] = {
 
 #define READBUF 1024
 
-struct program_settings_s {
+typedef struct program_settings_s {
     char *i_file;
     char *o_file;
     char *d_file;
     int threads;
     int verbose;
-} settings_t;
+} program_settings_t;
+
+typedef struct thread_stats_s {
+    long thread_id;
+    int DES_cracked;
+    int NT_cracked;
+    int MD5_cracked;
+    int SHA256_cracked;
+    int SHA512_cracked;
+    int YESCRYPT_cracked;
+    int GOST_YESCRYPT_cracked;
+    int BCRYPT_cracked;
+} thread_stats_t;
 
 void default_settings(struct program_settings_s *settings);
 void verbose(const char *msg, struct program_settings_s *settings);
@@ -85,18 +98,23 @@ void help(void);
 char *load_file(char *filename, int *word_count);
 char **split_string(char *string, int *word_count);
 int get_next_hash(void);
+void prep_stats(thread_stats_t *thread_stat, long thread_id);
 int detect_algorithm(char *hash);
 void *crack_hash(void *arg);
+void get_salt(char *hash, char *salt);
 
-static int hash_count = 0; // Number of hashes to solve
-static char **hash_list;   // List of hashes
-static char **dict_list;   // List of dictionary words
+static int hash_count = 0;           // Number of hashes to solve
+static char **hash_list;             // List of hashes
+static char **dict_list;             // List of dictionary words
+static int dict_count = 0;           // Number of words in dictionary
+static thread_stats_t *thread_stats; // Array of thread stats
+static struct timeval *thread_start; // Array of thread start times
+static struct timeval *thread_end;   // Array of thread end times
 
 int main(int argc, char *argv[]) {
     struct program_settings_s settings; // Settings for the program
     char *hashes;                       // Hashes from input file
     char *dictionary;                   // Dictionary from input file
-    int dict_count = 0;                 // Number of words in dictionary
     pthread_t *threads;                 // Array of threads
     long thread_id;                     // Thread ID
 
@@ -115,12 +133,22 @@ int main(int argc, char *argv[]) {
     NOISY_DEBUG_PRINT;
     dict_list = split_string(dictionary, &dict_count);
     NOISY_DEBUG_PRINT;
-    // Create Threads
+    // Allcate Memory for Threads, Stats, Start, and End Times
     threads = (pthread_t *)malloc(settings.threads * sizeof(pthread_t));
+    NOISY_DEBUG_PRINT;
+    thread_stats =
+        (thread_stats_t *)malloc(settings.threads * sizeof(thread_stats_t));
+    NOISY_DEBUG_PRINT;
     memset(threads, 0, settings.threads * sizeof(pthread_t));
+    NOISY_DEBUG_PRINT;
+
     for (thread_id = 0; thread_id < settings.threads; ++thread_id) {
+        NOISY_DEBUG_PRINT;
+        prep_stats(&thread_stats[thread_id], thread_id);
+        NOISY_DEBUG_PRINT;
         pthread_create(&threads[thread_id], NULL, crack_hash,
                        (void *)thread_id);
+        NOISY_DEBUG_PRINT;
     }
     NOISY_DEBUG_PRINT;
     // Join Threads
@@ -128,15 +156,14 @@ int main(int argc, char *argv[]) {
         pthread_join(threads[thread_id], NULL);
     }
 
-    // DELETE THIS SECTION WHEN THESE VARIABLES HAVE BEEN USED ELSEWHERE
-    // PREVENTS COMPILER WARNINGS
-    // DELETE THIS SECTION WHEN DONE
-
     free(hashes);
     free(dictionary);
     free(hash_list);
     free(dict_list);
     free(threads);
+    free(thread_stats);
+    free(thread_start);
+    free(thread_end);
     return EXIT_SUCCESS;
 }
 
@@ -317,6 +344,18 @@ int get_next_hash(void) {
     return cur_row;
 }
 
+void prep_stats(thread_stats_t *thread_stat, long thread_id) {
+    thread_stat->thread_id = thread_id;
+    thread_stat->DES_cracked = 0;
+    thread_stat->NT_cracked = 0;
+    thread_stat->MD5_cracked = 0;
+    thread_stat->SHA256_cracked = 0;
+    thread_stat->SHA512_cracked = 0;
+    thread_stat->YESCRYPT_cracked = 0;
+    thread_stat->GOST_YESCRYPT_cracked = 0;
+    thread_stat->BCRYPT_cracked = 0;
+}
+
 int detect_algorithm(char *hash) {
     /*
     # define FOREACH_ALGORITHM(ALGORITHM) \
@@ -389,9 +428,14 @@ struct crypt_data
 */
 
 void *crack_hash(void *arg) {
+    // Get the data from the argument and convert it to a long
+    long thread_id = (long)arg;
     int hash_index = -1;
     int algo = -1;
+    char salt[CRYPT_OUTPUT_SIZE];
     struct crypt_data c_data;
+
+    printf("Thread %ld started\n", thread_id);
 
     for (hash_index = get_next_hash(); hash_index < hash_count;
          hash_index = get_next_hash()) {
@@ -401,15 +445,53 @@ void *crack_hash(void *arg) {
         // Step 4: Hash a word from the dictionary with the salt
         // Step 5: Compare the hash to the hash we are trying to crack
         // Step 6: If the hashes match, we have cracked the hash and can stop
-        //         Otherwise go back to step 4 
+        //         Otherwise go back to step 4
         // Step 7: Print the cracked hash to the output file
         //
         // NOTE TO SELF. GET THE SALT BY STARTING AT THE END.
-        fprintf(stderr, "Cracking hash %d\n", hash_index);
-        fprintf(stderr, "Hash: %s\n", hash_list[hash_index]);
-        fprintf(stderr, "Algorithm: %s\n",
-                algorithm_string[detect_algorithm(hash_list[hash_index])]);
+        char *full_hash = hash_list[hash_index];
+        algo = detect_algorithm(full_hash);
+        memset(&c_data, 0, sizeof(struct crypt_data));
+        memset(salt, 0, CRYPT_OUTPUT_SIZE);
+        get_salt(full_hash, salt);
+        for (int i = 0; i < dict_count; ++i) {
+            crypt_rn(dict_list[i], salt, &c_data, sizeof(struct crypt_data));
+            if (strcmp(full_hash, c_data.output) == 0) {
+                printf("Cracked: %s\n", dict_list[i]);
+                printf("Hash: %s\n", full_hash);
+                printf("Salt: %s\n", salt);
+                printf("Algorithm: %s\n", algorithm_string[algo]);
+                break;
+            }
+        }
     }
 
     return NULL;
+}
+
+void get_salt(char *hash, char *salt) {
+    int i = 0;
+
+    // If it's a DES hash
+    if (hash[0] != '$') {
+        strncpy(salt, hash, 2);
+        return;
+    }
+
+    // If it's a BCRYPT hash
+    if (detect_algorithm(hash) == BCRYPT) {
+        strncpy(salt, hash, 29);
+        return;
+    }
+
+    // If it's any other hash find the $ from the right
+    // and copy everything up to it
+    for (i = strlen(hash) - 1; i >= 0; --i) {
+        if (hash[i] == '$') {
+            break;
+        }
+    }
+
+    strncpy(salt, hash, i);
+    return;
 }
