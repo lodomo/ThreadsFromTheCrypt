@@ -88,9 +88,9 @@ int get_next_hash(void);
 int detect_algorithm(char *hash);
 void *crack_hash(void *arg);
 
-static int hash_count = 0;              // Number of hashes to solve
-static char **hash_list;                // List of hashes
-static char **dict_list;                // List of dictionary words
+static int hash_count = 0; // Number of hashes to solve
+static char **hash_list;   // List of hashes
+static char **dict_list;   // List of dictionary words
 
 int main(int argc, char *argv[]) {
     struct program_settings_s settings; // Settings for the program
@@ -119,12 +119,12 @@ int main(int argc, char *argv[]) {
     threads = (pthread_t *)malloc(settings.threads * sizeof(pthread_t));
     memset(threads, 0, settings.threads * sizeof(pthread_t));
     for (thread_id = 0; thread_id < settings.threads; ++thread_id) {
-        pthread_create(&threads[thread_id], NULL, crack_hash, (void *)thread_id);
+        pthread_create(&threads[thread_id], NULL, crack_hash,
+                       (void *)thread_id);
     }
     NOISY_DEBUG_PRINT;
     // Join Threads
-    for (thread_id = 0; thread_id < settings.threads; ++thread_id) 
-    {
+    for (thread_id = 0; thread_id < settings.threads; ++thread_id) {
         pthread_join(threads[thread_id], NULL);
     }
 
@@ -364,13 +364,51 @@ int detect_algorithm(char *hash) {
     }
 }
 
+/*
+struct crypt_data
+{
+    // THE HASH
+    char output[CRYPT_OUTPUT_SIZE];
+
+    // THE SALT
+    char setting[CRYPT_OUTPUT_SIZE];
+
+    // THE PASSPHRASE
+    char input[CRYPT_MAX_PASSPHRASE_SIZE];
+
+    // NOT NEEDED I DONT THINK
+    char reserved[CRYPT_DATA_RESERVED_SIZE];
+
+    // SET TO ZERO
+    char initialized;
+
+    // NOT NEEDED TO USE
+    char internal[CRYPT_DATA_INTERNAL_SIZE];
+};
+
+*/
+
 void *crack_hash(void *arg) {
     int hash_index = -1;
+    int algo = -1;
+    struct crypt_data c_data;
 
-    for (hash_index = get_next_hash(); hash_index < hash_count; hash_index = get_next_hash()) {
+    for (hash_index = get_next_hash(); hash_index < hash_count;
+         hash_index = get_next_hash()) {
+        // Step 1: Get the next hash to crack
+        // Step 2: Find the algorithm used to create the hash
+        // Step 3: Get the salt from the hash
+        // Step 4: Hash a word from the dictionary with the salt
+        // Step 5: Compare the hash to the hash we are trying to crack
+        // Step 6: If the hashes match, we have cracked the hash and can stop
+        //         Otherwise go back to step 4 
+        // Step 7: Print the cracked hash to the output file
+        //
+        // NOTE TO SELF. GET THE SALT BY STARTING AT THE END.
         fprintf(stderr, "Cracking hash %d\n", hash_index);
         fprintf(stderr, "Hash: %s\n", hash_list[hash_index]);
-        fprintf(stderr, "Algorithm: %s\n", algorithm_string[detect_algorithm(hash_list[hash_index])]);
+        fprintf(stderr, "Algorithm: %s\n",
+                algorithm_string[detect_algorithm(hash_list[hash_index])]);
     }
 
     return NULL;
