@@ -79,14 +79,9 @@ typedef struct program_settings_s {
 
 typedef struct thread_stats_s {
     long thread_id;
-    int DES_cracked;
-    int NT_cracked;
-    int MD5_cracked;
-    int SHA256_cracked;
-    int SHA512_cracked;
-    int YESCRYPT_cracked;
-    int GOST_YESCRYPT_cracked;
-    int BCRYPT_cracked;
+    int cracked[ALGORITHM_MAX];
+    struct timeval start_time;
+    struct timeval end_time;
 } thread_stats_t;
 
 void default_settings(struct program_settings_s *settings);
@@ -98,18 +93,18 @@ void help(void);
 char *load_file(char *filename, int *word_count);
 char **split_string(char *string, int *word_count);
 int get_next_hash(void);
-void prep_stats(thread_stats_t *thread_stat, long thread_id);
 int detect_algorithm(char *hash);
 void *crack_hash(void *arg);
 void get_salt(char *hash, char *salt);
+void print_stats(thread_stats_t *stats, int all);
+double elapsed_time(struct timeval *t0, struct timeval *t1);
 
 static int hash_count = 0;           // Number of hashes to solve
 static char **hash_list;             // List of hashes
 static char **dict_list;             // List of dictionary words
 static int dict_count = 0;           // Number of words in dictionary
 static thread_stats_t *thread_stats; // Array of thread stats
-static struct timeval *thread_start; // Array of thread start times
-static struct timeval *thread_end;   // Array of thread end times
+static FILE *output = NULL;
 
 int main(int argc, char *argv[]) {
     struct program_settings_s settings; // Settings for the program
@@ -117,6 +112,9 @@ int main(int argc, char *argv[]) {
     char *dictionary;                   // Dictionary from input file
     pthread_t *threads;                 // Array of threads
     long thread_id;                     // Thread ID
+    thread_stats_t all_stats;           // Stats for all threads
+
+    output = stdout; // Default output to stdout
 
     NOISY_DEBUG_PRINT;
     default_settings(&settings);
@@ -140,15 +138,15 @@ int main(int argc, char *argv[]) {
         (thread_stats_t *)malloc(settings.threads * sizeof(thread_stats_t));
     NOISY_DEBUG_PRINT;
     memset(threads, 0, settings.threads * sizeof(pthread_t));
+    memset(thread_stats, 0, settings.threads * sizeof(thread_stats_t));
+    memset(&all_stats, 0, sizeof(thread_stats_t));
     NOISY_DEBUG_PRINT;
-
+    // Create Threads
+    all_stats.thread_id = settings.threads;
+    gettimeofday(&all_stats.start_time, NULL);
     for (thread_id = 0; thread_id < settings.threads; ++thread_id) {
-        NOISY_DEBUG_PRINT;
-        prep_stats(&thread_stats[thread_id], thread_id);
-        NOISY_DEBUG_PRINT;
         pthread_create(&threads[thread_id], NULL, crack_hash,
                        (void *)thread_id);
-        NOISY_DEBUG_PRINT;
     }
     NOISY_DEBUG_PRINT;
     // Join Threads
@@ -156,14 +154,24 @@ int main(int argc, char *argv[]) {
         pthread_join(threads[thread_id], NULL);
     }
 
+    for (thread_id = 0; thread_id < settings.threads; ++thread_id) {
+        for (int i = 0; i < ALGORITHM_MAX; ++i) {
+            all_stats.cracked[i] += thread_stats[thread_id].cracked[i];
+        }
+    }
+    gettimeofday(&all_stats.end_time, NULL);
+    print_stats(&all_stats, TRUE);
+
+    // Clean up
+    if (output != stdout) {
+        fclose(output);
+    };
     free(hashes);
     free(dictionary);
     free(hash_list);
     free(dict_list);
     free(threads);
     free(thread_stats);
-    free(thread_start);
-    free(thread_end);
     return EXIT_SUCCESS;
 }
 
@@ -224,6 +232,14 @@ void process_options(int argc, char *argv[],
                     argv[optind]);
             exit(EXIT_FAILURE);
             break;
+        }
+    }
+
+    if (settings->o_file) {
+        output = fopen(settings->o_file, "w");
+        if (output == NULL) {
+            fprintf(stderr, "fopen failed on %s\n", settings->o_file);
+            exit(EXIT_FAILURE);
         }
     }
 
@@ -344,18 +360,6 @@ int get_next_hash(void) {
     return cur_row;
 }
 
-void prep_stats(thread_stats_t *thread_stat, long thread_id) {
-    thread_stat->thread_id = thread_id;
-    thread_stat->DES_cracked = 0;
-    thread_stat->NT_cracked = 0;
-    thread_stat->MD5_cracked = 0;
-    thread_stat->SHA256_cracked = 0;
-    thread_stat->SHA512_cracked = 0;
-    thread_stat->YESCRYPT_cracked = 0;
-    thread_stat->GOST_YESCRYPT_cracked = 0;
-    thread_stat->BCRYPT_cracked = 0;
-}
-
 int detect_algorithm(char *hash) {
     /*
     # define FOREACH_ALGORITHM(ALGORITHM) \
@@ -435,7 +439,9 @@ void *crack_hash(void *arg) {
     char salt[CRYPT_OUTPUT_SIZE];
     struct crypt_data c_data;
 
-    printf("Thread %ld started\n", thread_id);
+    // Get the start time for the thread
+    thread_stats[thread_id].thread_id = thread_id;
+    gettimeofday(&thread_stats[thread_id].start_time, NULL);
 
     for (hash_index = get_next_hash(); hash_index < hash_count;
          hash_index = get_next_hash()) {
@@ -454,18 +460,20 @@ void *crack_hash(void *arg) {
         memset(&c_data, 0, sizeof(struct crypt_data));
         memset(salt, 0, CRYPT_OUTPUT_SIZE);
         get_salt(full_hash, salt);
+        fprintf(stderr, "thread %2ld: cracking %s\n", thread_id, full_hash);
         for (int i = 0; i < dict_count; ++i) {
             crypt_rn(dict_list[i], salt, &c_data, sizeof(struct crypt_data));
             if (strcmp(full_hash, c_data.output) == 0) {
-                printf("Cracked: %s\n", dict_list[i]);
-                printf("Hash: %s\n", full_hash);
-                printf("Salt: %s\n", salt);
-                printf("Algorithm: %s\n", algorithm_string[algo]);
+                fprintf(output, "cracked  %s  %s\n", dict_list[i], full_hash);
                 break;
             }
         }
+        thread_stats[thread_id].cracked[algo] += 1;
     }
 
+    // Get the end time for the thread
+    gettimeofday(&thread_stats[thread_id].end_time, NULL);
+    print_stats(&thread_stats[thread_id], FALSE);
     return NULL;
 }
 
@@ -494,4 +502,32 @@ void get_salt(char *hash, char *salt) {
 
     strncpy(salt, hash, i);
     return;
+}
+
+void print_stats(thread_stats_t *stats, int all) {
+    double et = elapsed_time(&stats->start_time, &stats->end_time);
+    int total = 0;
+
+    for (int i = 0; i < ALGORITHM_MAX; ++i) {
+        total += stats->cracked[i];
+    }
+
+    if (all) {
+        fprintf(stderr, "total:  %2ld  ", stats->thread_id);
+    } else {
+        fprintf(stderr, "thread: %2ld  ", stats->thread_id);
+    }
+    fprintf(stderr, "%7.2f sec ", et);
+    for (int i = 0; i < ALGORITHM_MAX; ++i) {
+        fprintf(stderr, "%16s:%6d ", algorithm_string[i], stats->cracked[i]);
+    }
+    fprintf(stderr, " total:%9d\n", total);
+}
+
+double elapsed_time(struct timeval *t0, struct timeval *t1) {
+    double et =
+        (((double)(t1->tv_usec - t0->tv_usec)) / MICROSECONDS_PER_SECOND) +
+        ((double)(t1->tv_sec - t0->tv_sec));
+
+    return et;
 }
