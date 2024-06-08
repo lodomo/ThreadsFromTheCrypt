@@ -1,0 +1,12 @@
+	hashes: 250	threads: 1	sec: 153	min: 2.55
+	hashes: 250	threads: 2	sec: 82		min: 1.37
+	hashes: 250	threads: 4	sec: 40		min: 0.67
+	hashes: 250	threads: 8	sec: 27		min: 0.45
+	hashes: 250	threads: 16	sec: 21		min: 0.35
+	hashes: 250	threads: 24	sec: 30		min: 0.50
+	hashes: 500	threads: 1	sec: 812	min: 13.53
+	hashes: 500	threads: 2	sec: 404	min: 6.73
+	hashes: 500	threads: 4	sec: 213	min: 3.55
+	hashes: 500	threads: 8	sec: 120	min: 2.00
+	hashes: 500	threads: 16	sec: 77		min: 1.28
+	hashes: 500	threads: 24	sec: 121	min: 2.02
